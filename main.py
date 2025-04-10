@@ -1,9 +1,20 @@
 import pickle
+import os
 import streamlit as st
 import pandas as pd
+import numpy as np
+from dotenv import load_dotenv
+from pymongo.mongo_client import MongoClient
+from pymongo.server_api import ServerApi
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, mean_squared_error, r2_score
+
+
+uri = st.secrets["MONGO_URI"]
+client = MongoClient(uri, server_api=ServerApi('1'))
+db = client['Student']
+collection = db['Student_Performance']
 
 def load_model():
     """
@@ -23,6 +34,9 @@ def preprocess_data(data, scaler, le):
     return df_transformed
 
 def predict(data):
+    """
+    Predict the student's performance based on the input data.
+    """
     model, scaler, le = load_model()
     preprocessed_data = preprocess_data(data, scaler, le)   
     prediction = model.predict(preprocessed_data)
@@ -81,6 +95,14 @@ def main():
 
         prediction = predict(user_data)
         st.success(f"🎉 Predicted Score: {prediction[0]}")
+        # Add the predicted score to the user data
+        user_data['Predicted Score'] = float(prediction[0])
+        
+        # Convert all values in user_data to standard Python types
+        user_data = {key: int(value) if isinstance(value, (np.integer, np.int32, np.int64)) else float(value) if isinstance(value, (np.float32, np.float64)) else value for key, value in user_data.items()}
+        
+        # Insert the data into MongoDB
+        collection.insert_one(user_data)
 
     # Footer
     st.markdown("---")
@@ -92,6 +114,7 @@ def main():
         """,
         unsafe_allow_html=True
     )
+
 
 if __name__ == "__main__":
     main()
